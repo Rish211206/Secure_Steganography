@@ -1,254 +1,382 @@
-# Secure Image Steganography with AES-256 Encryption
+# 🔐 Secure Image Steganography with AES-256 Encryption
 
-An educational Python desktop application that demonstrates how to combine **authenticated cryptography** with **least significant bit (LSB) steganography** to secretly and securely hide confidential messages inside digital images.
+A Python desktop application that combines **AES-256 authenticated encryption** with **Least Significant Bit (LSB) image steganography** to securely hide confidential text messages inside digital images.
 
-Built with **Python 3**, **Tkinter / ttk**, **Pillow (PIL)**, and the **cryptography** library.
+The application allows users to encrypt secret messages, embed them into images, and retrieve the original messages using the appropriate password. It provides a graphical user interface (GUI) for performing encoding and decoding operations.
 
----
+## 📌 Table of Contents
 
-## 📑 Table of Contents
-1. [Core Concepts & Theory](#-core-concepts--theory)
-   - [Cryptography vs. Steganography](#1-cryptography-vs-steganography)
-   - [Key Derivation: PBKDF2-HMAC-SHA256](#2-key-derivation-pbkdf2-hmac-sha256)
-   - [Authenticated Encryption: AES-256-GCM](#3-authenticated-encryption-aes-256-gcm)
-   - [Least Significant Bit (LSB) Steganography](#4-least-significant-bit-lsb-steganography)
-   - [Why PNG is Essential (and why JPEG breaks it)](#5-why-png-is-essential-and-why-jpeg-breaks-it)
-2. [Project Structure](#-project-structure)
-3. [Installation & Requirements](#-installation--requirements)
-4. [Running the Application](#-running-the-application)
-   - [Launching the Desktop GUI](#launching-the-desktop-gui)
-   - [Running Automated Unit Tests](#running-automated-unit-tests)
-   - [Generating Sample Images](#generating-sample-images)
-5. [User Guide](#-user-guide)
-   - [Encoding Workflow](#encoding-workflow-hiding-a-message)
-   - [Decoding Workflow](#decoding-workflow-revealing-a-message)
-6. [Binary Packet Framing Format](#-binary-packet-framing-format)
-7. [Error Handling & Edge Cases](#-error-handling--edge-cases)
-8. [Security & Educational Disclaimer](#-security--educational-disclaimer)
+- [Overview](#-overview)
+- [Features](#-features)
+- [How It Works](#-how-it-works)
+- [Technology Stack](#-technology-stack)
+- [Project Structure](#-project-structure)
+- [Prerequisites](#-prerequisites)
+- [Installation and Setup](#-installation-and-setup)
+- [Running the Application](#-running-the-application)
+- [Usage Guide](#-usage-guide)
+- [Running Tests](#-running-tests)
+- [Sample Files](#-sample-files)
+- [Troubleshooting](#-troubleshooting)
+- [Security and Limitations](#-security-and-limitations)
+- [Future Enhancements](#-future-enhancements)
+- [Author](#-author)
 
----
+## 📖 Overview
 
-## 🧠 Core Concepts & Theory
+Secure Image Steganography is a cybersecurity project designed to demonstrate how cryptography and steganography can work together to protect confidential information.
 
-### 1. Cryptography vs. Steganography
-- **Cryptography** scrambles the *meaning* of a message using mathematical algorithms. Anyone inspecting the data sees random-looking ciphertext and cannot read it without the secret key. However, the presence of encrypted data can attract unwanted attention.
-- **Steganography** conceals the *very existence* of a message by embedding it into an innocent-looking carrier medium (such as a digital photograph). An observer cannot tell by looking that anything is hidden.
-- **Combining Both (Defense-in-Depth):** This application encrypts the secret message first using AES-256-GCM and then hides the resulting ciphertext inside the pixel channels of an image. If someone discovers that an image has hidden data, they still cannot decrypt it without the password.
+**Cryptography** protects the content of a message by converting it into encrypted data, while **steganography** hides that data inside an ordinary image.
 
-### 2. Key Derivation: PBKDF2-HMAC-SHA256
-Human-chosen passwords vary in length and often lack sufficient entropy. Cryptographic algorithms like AES require uniform, high-entropy 256-bit (32-byte) keys.
-- **PBKDF2 (Password-Based Key Derivation Function 2)** applies a pseudo-random function (`HMAC-SHA256`) along with a cryptographically secure random 16-byte salt across **200,000 iterations**.
-- This deliberate computational work drastically slows down brute-force and pre-computed rainbow table attacks.
-- Each encryption generates a fresh, unique salt, ensuring that the same password produces completely different AES keys each time.
+Instead of transmitting a visible encrypted message, the application embeds the encrypted payload into an image using the Least Significant Bit (LSB) technique.
 
-### 3. Authenticated Encryption: AES-256-GCM
-- **AES (Advanced Encryption Standard)** with a 256-bit key provides robust symmetric encryption.
-- **GCM (Galois/Counter Mode)** is an *Authenticated Encryption with Associated Data (AEAD)* mode.
-- In addition to encrypting the plaintext, GCM computes a **16-byte authentication tag**.
-- When decrypting, AES-GCM recalculates this tag. If the wrong password was used, or if even a single bit of the image or ciphertext was modified or corrupted, tag verification fails immediately (`InvalidTag`), preventing malicious tampering and silent corruption.
-- Every encryption operation generates a unique random **12-byte (96-bit) Nonce** (`os.urandom(12)`) to ensure nonce reuse never occurs.
+The resulting image can be shared as an image file. A recipient with the appropriate password can extract and decrypt the hidden message.
 
-### 4. Least Significant Bit (LSB) Steganography
-- A standard digital RGB image represents every pixel with 3 color channels: **Red**, **Green**, and **Blue**.
-- Each channel byte holds an 8-bit integer between 0 and 255 (`00000000` to `11111111`).
-- The **Least Significant Bit (LSB)** is bit 0 (the rightmost bit, value 1).
-- Modifying the LSB changes the color channel brightness by at most $\pm 1$ unit out of 255 (e.g., changing Red from 180 to 181). This alteration is completely imperceptible to the human eye.
-- **Capacity calculation:**
-  $$\text{Capacity in Bits} = \text{Width} \times \text{Height} \times 3$$
-  $$\text{Capacity in Bytes} = \lfloor \frac{\text{Width} \times \text{Height} \times 3}{8} \rfloor$$
-  For example, a modest $500 \times 400$ image provides:
-  $$\frac{500 \times 400 \times 3}{8} = 75,000 \text{ bytes (75 KB)}$$
-  which can store thousands of words of encrypted text.
+## ✨ Features
 
-### 5. Why PNG is Essential (and why JPEG breaks it)
-- **PNG (Portable Network Graphics):** Uses **lossless** Deflate compression. Every single pixel channel byte is saved and restored with 100% mathematical fidelity. The LSBs remain completely intact.
-- **JPEG (Joint Photographic Experts Group):** Uses **lossy** compression based on Discrete Cosine Transforms (DCT) and quantization tables. JPEG deliberately discards high-frequency pixel variations to reduce file size. This alters pixel values by $\pm 1$, $\pm 2$, or more, which completely destroys the embedded LSB data.
-- **Rule:** You can upload JPG or PNG files as carrier images, but the encoded output must **always be saved as PNG**.
+- **AES-256 Encryption:** Encrypts secret messages before embedding them in an image.
+- **Authenticated Encryption:** Uses AES-GCM to provide confidentiality and integrity verification.
+- **Password-Based Key Derivation:** Derives an encryption key from a password.
+- **LSB Image Steganography:** Hides encrypted data in the least significant bits of image pixel values.
+- **Message Encoding:** Embeds an encrypted message into a selected carrier image.
+- **Message Extraction:** Retrieves the hidden encrypted payload from an encoded image.
+- **Message Decryption:** Decrypts the extracted payload using the correct password.
+- **Graphical User Interface:** Provides an interface for performing encoding and decoding operations.
+- **Image-Based Data Hiding:** Uses digital images as carriers for secret information.
+- **Error Handling:** Helps handle invalid inputs, incorrect passwords, and unsuccessful extraction or decryption operations.
 
----
+## ⚙️ How It Works
 
-## 📂 Project Structure
+The application combines cryptography and steganography in a sequence of operations.
+
+### 1. Message Encryption
+
+The user enters a secret message and a password. The application derives an encryption key from the password and uses AES-256-GCM to encrypt the message.
+
+The encryption process produces encrypted data and authentication information required for verification and decryption.
+
+### 2. Data Preparation
+
+The encrypted payload is prepared for embedding into the carrier image. The application must preserve the information needed to identify and extract the payload correctly.
+
+### 3. Image Steganography
+
+The encrypted payload is embedded into the least significant bits of the carrier image's pixel values.
+
+LSB steganography modifies pixel values slightly so that data can be stored in the image while generally preserving its visual appearance.
+
+### 4. Encoded Image Generation
+
+The application generates an output image containing the encrypted payload. The encoded image can be saved for later extraction or transfer.
+
+A lossless image format, such as PNG, is recommended to preserve the embedded data.
+
+### 5. Message Extraction
+
+During decoding, the application reads the encoded image and extracts the hidden payload using the corresponding extraction procedure.
+
+### 6. Message Decryption
+
+The extracted payload is decrypted using the correct password-derived key. Authentication verification helps detect an incorrect key or modified encrypted data.
+
+If decryption and authentication succeed, the original secret message is recovered.
+
+**Overall workflow:**
+
+`Secret Message → AES-256-GCM Encryption → LSB Embedding → Encoded Image → Payload Extraction → Decryption → Original Message`
+
+## 🛠️ Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Python 3 | Core application logic |
+| Tkinter / ttk | Desktop graphical user interface |
+| Pillow (PIL) | Image loading and processing |
+| Python `cryptography` library | Encryption and authenticated decryption |
+| LSB Steganography | Hiding encrypted data in image pixels |
+| Git and GitHub | Version control and source code hosting |
+| pytest / unittest | Testing, depending on the test implementation |
+
+## 📁 Project Structure
 
 ```text
 secure_steganography_app/
-├── crypto_utils.py          # PBKDF2-HMAC-SHA256 key derivation & AES-256-GCM encryption
-├── stego_utils.py           # LSB embedding, extraction, framing header, & capacity math
-├── gui.py                   # Tkinter/ttk desktop GUI (Encode/Decode tabs, meter, preview)
-├── main.py                  # Entrypoint script (launches GUI or test suite)
-├── test_stego.py            # Automated test suite (14 unit tests)
-├── create_sample_images.py  # Utility script to generate sample PNG & JPG test carriers
-├── requirements.txt         # Pinned Python package dependencies
-└── README.md                # Detailed project documentation and educational guide
+│
+├── main.py                  # Main application entry point
+├── gui.py                   # Graphical user interface
+├── crypto_utils.py          # Cryptographic utility functions
+├── stego_utils.py           # Image steganography operations
+├── create_sample_images.py  # Sample image generation
+├── test_stego.py            # Steganography tests
+├── requirements.txt         # Python dependencies
+├── README.md                # Project documentation
+│
+├── sample_carrier.jpg       # Sample carrier image
+├── sample_carrier.png       # Sample carrier image
+└── sample_encoded.png       # Sample encoded image
 ```
 
-### Explanation of Files
-- **`crypto_utils.py`**: Contains `derive_key()`, `encrypt_message()`, and `decrypt_message()`. Handles all cryptographic primitives and defines `DecryptionError` for clear reporting of invalid passwords or tampered data.
-- **`stego_utils.py`**: Converts images to RGB, calculates capacity, and efficiently replaces channel LSBs using `bytearray` operations. Houses `encode_message_into_image()` and `decode_message_from_image()`.
-- **`gui.py`**: Implements the modern `SteganographyApp` window using Tkinter and `ttk.Notebook`. Features responsive layout, image thumbnails, live capacity meter, password visibility toggles, clipboard support, and friendly error dialogs.
-- **`main.py`**: Clean application launcher supporting normal GUI execution or `--test` flag for headless test verification.
-- **`test_stego.py`**: Unittest suite asserting cryptographic correctness, wrong password handling, tampered ciphertext detection, capacity bounds, round-trip encoding/decoding, and Unicode support.
+The `__pycache__` and virtual environment folders are generated locally and do not need to be included in the repository.
 
----
+## 💻 Prerequisites
 
-## ⚙️ Installation & Requirements
+Before running the application, ensure that the following are installed:
 
-### Prerequisites
-- Python 3.10, 3.11, 3.12, or 3.13 installed on your system.
-- Tkinter (included by default with official Python installers on Windows and macOS; on Ubuntu/Debian Linux, install via `sudo apt-get install python3-tk`).
+- **Python 3:** A compatible Python 3 installation.
+- **Git:** Required if cloning the project from GitHub.
+- **Terminal:** PowerShell or Command Prompt on Windows, or a terminal on Linux/macOS.
 
-### Step-by-Step Setup
+Check your installations:
 
-1. **Open your terminal or PowerShell** and navigate to the project directory:
-   ```bash
-   cd C:\Users\HP\.gemini\antigravity\scratch\secure_steganography_app
-   ```
+```bash
+python --version
+git --version
+```
 
-2. **Create a Python virtual environment**:
-   ```bash
-   python -m venv .venv
-   ```
+On some systems, use `python3` instead of `python`.
 
-3. **Activate the virtual environment**:
-   - On Windows (PowerShell):
-     ```powershell
-     .\.venv\Scripts\Activate.ps1
-     ```
-   - On Windows (Command Prompt):
-     ```cmd
-     .venv\Scripts\activate.bat
-     ```
-   - On macOS / Linux:
-     ```bash
-     source .venv/bin/activate
-     ```
+## 🚀 Installation and Setup
 
-4. **Install the required dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(Or install directly: `pip install cryptography pillow`)*
+### Step 1: Clone the Repository
 
----
+Open a terminal and run:
 
-## 🚀 Running the Application
+```bash
+git clone https://github.com/Rish211206/Secure_Steganography.git
+```
 
-### Launching the Desktop GUI
-With your virtual environment activated, run:
+Move into the project directory:
+
+```bash
+cd Secure_Steganography
+```
+
+If you download the project as a ZIP file instead, extract it and open the extracted project folder in your terminal.
+
+### Step 2: Create a Virtual Environment
+
+A virtual environment keeps the project's Python dependencies separate from other applications.
+
+**Windows — PowerShell or Command Prompt**
+
+```powershell
+python -m venv .venv
+```
+
+Activate it in PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Or activate it in Command Prompt:
+
+```cmd
+.venv\Scripts\activate.bat
+```
+
+**Linux/macOS**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Once activated, the environment name may appear at the beginning of your terminal prompt.
+
+### Step 3: Upgrade pip
+
+```bash
+python -m pip install --upgrade pip
+```
+
+### Step 4: Install Dependencies
+
+Install the required libraries using the provided requirements file:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+The application uses Python libraries for image processing, encryption, and its graphical interface.
+
+Tkinter is included with many standard Python installations. On some Linux distributions, it must be installed separately through the operating system's package manager.
+
+### Step 5: Verify the Installation
+
+Check that the principal libraries can be imported:
+
+```bash
+python -c "import tkinter, PIL, cryptography; print('Dependencies installed successfully!')"
+```
+
+If the command prints the success message, the principal imports are available.
+
+## ▶️ Running the Application
+
+Run the application from the root directory of the project with the virtual environment activated.
+
 ```bash
 python main.py
 ```
-*(On Windows PowerShell without activating, you can also run directly:)*
-```powershell
-& ".\.venv\Scripts\python.exe" main.py
+
+The graphical interface should open if `main.py` is configured to launch the application.
+
+If the GUI is launched directly from `gui.py` in your version of the project, use:
+
+```bash
+python gui.py
 ```
 
-### Running Automated Unit Tests
-To verify all cryptographic routines, steganography bit manipulation, and edge cases:
-```bash
-python main.py --test
-```
-or:
+Use the entry point configured in your project. Do not run both commands simultaneously.
+
+## 🖥️ Usage Guide
+
+### Encoding a Secret Message
+
+1. Launch the application.
+2. Select the encoding operation in the interface.
+3. Enter the secret message.
+4. Enter a strong password.
+5. Select a suitable carrier image.
+6. Start the encoding operation.
+7. Save the generated encoded image to the desired location.
+8. Keep the password secure for subsequent decoding.
+
+### Decoding a Secret Message
+
+1. Launch the application.
+2. Select the decoding operation.
+3. Choose the previously encoded image.
+4. Enter the correct password.
+5. Start the extraction and decryption process.
+6. View the recovered message if authentication and decryption succeed.
+
+The exact button names and input fields depend on the implemented GUI.
+
+## 🧪 Running Tests
+
+The project includes a steganography test file named `test_stego.py`.
+
+Activate the virtual environment and run:
+
 ```bash
 python -m unittest test_stego.py
 ```
-**Expected Test Output:**
-```text
-test_crypto_empty_inputs (test_stego.TestCryptoUtils.test_crypto_empty_inputs) ... ok
-test_crypto_roundtrip (test_stego.TestCryptoUtils.test_crypto_roundtrip) ... ok
-test_crypto_tampered_ciphertext (test_stego.TestCryptoUtils.test_crypto_tampered_ciphertext) ... ok
-test_crypto_wrong_password (test_stego.TestCryptoUtils.test_crypto_wrong_password) ... ok
-test_key_derivation_deterministic (test_stego.TestCryptoUtils.test_key_derivation_deterministic) ... ok
-test_key_derivation_salt_diversity (test_stego.TestCryptoUtils.test_key_derivation_salt_diversity) ... ok
-test_capacity_calculation (test_stego.TestStegoUtils.test_capacity_calculation) ... ok
-test_capacity_exceeded_error (test_stego.TestStegoUtils.test_capacity_exceeded_error) ... ok
-test_capacity_formatting (test_stego.TestStegoUtils.test_capacity_formatting) ... ok
-test_jpeg_carrier_to_png_workflow (test_stego.TestStegoUtils.test_jpeg_carrier_to_png_workflow) ... ok
-test_stego_roundtrip (test_stego.TestStegoUtils.test_stego_roundtrip) ... ok
-test_stego_unencoded_image_error (test_stego.TestStegoUtils.test_stego_unencoded_image_error) ... ok
-test_stego_unicode_and_emojis (test_stego.TestStegoUtils.test_stego_unicode_and_emojis) ... ok
-test_stego_wrong_password_error (test_stego.TestStegoUtils.test_stego_wrong_password_error) ... ok
 
-----------------------------------------------------------------------
-Ran 14 tests in 0.701s
+If the test file uses pytest, install it if necessary:
 
-OK
-```
-
-### Generating Sample Images
-A helper script is included to generate ready-to-use sample carrier images:
 ```bash
-python create_sample_images.py
+python -m pip install pytest
 ```
-This generates:
-- `sample_carrier.png`: A $500 \times 400$ PNG image (75 KB capacity).
-- `sample_carrier.jpg`: A $500 \times 400$ JPEG image to demonstrate converting JPEG carriers into PNG stego files.
 
----
+Then run:
 
-## 🖥️ User Guide
+```bash
+python -m pytest -v
+```
 
-### Encoding Workflow (Hiding a Message)
-1. Select the **Encode (Hide & Encrypt)** tab.
-2. Click **📁 Browse Carrier Image...** and select any PNG or JPG photo.
-   - The app displays image dimensions, total pixels, and maximum byte capacity.
-   - A thumbnail preview will render in the top right.
-3. Type or paste your secret message in the **Secret Message** box.
-   - The **Capacity Meter** updates in real-time, showing required bytes and percentage of carrier capacity used.
-4. Enter an encryption password in **Secret Password** and re-enter it in **Confirm Password**.
-5. Click **🔒 Encrypt & Save Encoded Image as PNG**.
-6. Choose a destination path. The app will encrypt the message with AES-256-GCM, embed the ciphertext into pixel LSBs, and save the resulting image losslessly as `.png`.
+Use the test runner supported by the actual test file. A successful test run helps verify the implemented operations, but does not by itself establish that the application is secure against every attack.
 
-### Decoding Workflow (Revealing a Message)
-1. Select the **Decode (Extract & Decrypt)** tab.
-2. Click **📁 Browse Encoded Image...** and select the encoded `.png` file.
-3. Enter the secret password used during encoding.
-4. Click **🔓 Extract & Decrypt Secret Message**.
-5. The extracted plaintext message will appear in the decrypted text area.
-6. Click **📋 Copy to Clipboard** to copy the revealed message.
+## 🖼️ Sample Files
 
----
+The repository includes sample images that can be used to explore the application's workflow.
 
-## 📦 Binary Packet Framing Format
+- `sample_carrier.jpg` — sample carrier image.
+- `sample_carrier.png` — sample carrier image.
+- `sample_encoded.png` — sample encoded image.
 
-The embedded bitstream uses the following binary framing structure:
+Use the sample files according to the operations supported by the application. An encoded sample will only yield a message if it was generated using the compatible implementation and its corresponding password is available.
 
-| Field | Size | Description |
-| :--- | :--- | :--- |
-| **Magic Signature** | 4 bytes | Fixed ASCII bytes `b'AEST'` to identify encoded images |
-| **Protocol Version**| 1 byte  | Protocol version (`0x01`) |
-| **Payload Length**  | 4 bytes | Big-endian 32-bit unsigned integer ($N$) |
-| **PBKDF2 Salt**     | 16 bytes| Cryptographically random salt for key derivation |
-| **AES-GCM Nonce**   | 12 bytes| Unique 96-bit nonce for AES-GCM |
-| **Ciphertext + Tag**| $N - 28$ bytes | AES-256 ciphertext + 16-byte GCM authentication tag |
+## 🐛 Troubleshooting
 
-**Total Overhead:** 53 bytes.
+### 1. `ModuleNotFoundError`
 
-### Why this design is robust:
-- **Instant Non-Payload Rejection:** If an unencoded image is selected, the decoder checks the first 4 bytes (`b'AEST'`). If missing, it immediately aborts with a friendly error without attempting costly decryption.
-- **Tamper Resistance:** If an attacker modifies even a single pixel bit within the payload, AES-GCM tag verification fails upon decryption.
+**Cause:** A required Python package is missing or installed in a different environment.
 
----
+**Solution:**
 
-## 🛡️ Error Handling & Edge Cases
+```bash
+python -m pip install -r requirements.txt
+```
 
-The application handles common pitfalls with user-friendly dialogs:
-1. **Wrong Password on Decryption:**
-   - Displays: *"Decryption failed: Incorrect password or corrupted/tampered data."*
-2. **Unencoded or Corrupted Image:**
-   - Displays: *"No hidden steganographic payload detected in this image."*
-   - Explains that the image may not be encoded or was compressed with JPEG.
-3. **Insufficient Image Capacity:**
-   - The UI warns you before saving if payload exceeds capacity.
-   - Displays: *"Image capacity exceeded! Required: X bytes, Available: Y bytes. Please use a larger image or shorten the message."*
-4. **Password Mismatch:**
-   - Alerts the user if the confirmation password does not match.
-5. **Unicode & Emojis:**
-   - Full UTF-8 encoding ensures multi-language text, accents, and emojis (e.g. `🔒 🚀`) are safely preserved.
+Ensure that the correct virtual environment is activated.
 
----
+### 2. Python Command Not Found
 
-## ⚠️ Security & Educational Disclaimer
+**Cause:** Python is not installed correctly or is not available on the system PATH.
 
-This software was developed as an **educational project** to demonstrate the mechanics of authenticated symmetric encryption and digital image steganography.
-- **Statistical Steganalysis:** Simple LSB steganography alters the least significant bit in a sequential pattern starting at pixel $(0,0)$. Advanced statistical tools (such as chi-square steganalysis or sample pair analysis) can detect unusual bit distributions in the LSB plane of an image.
-- **Lossy Compression Warning:** Never send encoded steganographic images through social media platforms (e.g., WhatsApp, Discord, Twitter/X) that re-compress or re-encode images as JPEG or WebP, as this will destroy the LSB payload. Transmit encoded images as lossless PNG files (or as uncompressed file attachments).
+**Solution:** Install Python 3 and verify it with:
+
+```bash
+python --version
+```
+
+On Linux/macOS, try:
+
+```bash
+python3 --version
+```
+
+### 3. Tkinter Import Error
+
+**Cause:** Tkinter is unavailable in the Python installation.
+
+**Solution:** On Linux, install the appropriate Tkinter package through your distribution's package manager. On Windows, use a Python distribution that includes Tkinter.
+
+### 4. Incorrect Password or Decryption Failure
+
+**Cause:** The supplied password is incorrect, the extracted payload is invalid, or the encrypted data has been modified.
+
+**Solution:** Verify the password and use the original encoded image without altering or recompressing it.
+
+### 5. Hidden Message Cannot Be Extracted
+
+**Cause:** The selected image may not contain a compatible hidden payload, or image processing may have altered the embedded bits.
+
+**Solution:** Select the correct encoded image and avoid lossy image compression, resizing, or editing.
+
+### 6. Image Capacity Error
+
+**Cause:** The encrypted payload may exceed the capacity of the selected carrier image.
+
+**Solution:** Use a larger supported carrier image or a shorter message.
+
+### 7. Application Does Not Open
+
+**Cause:** The wrong entry-point file was run, a dependency is missing, or a runtime error occurred.
+
+**Solution:** Check the terminal output, verify the installation, and run the correct application entry point.
+
+## 🔒 Security and Limitations
+
+This project is intended for educational purposes and demonstrates the integration of authenticated encryption and image steganography.
+
+- **Encryption:** AES-256-GCM protects the confidentiality and integrity of encrypted data when implemented and configured correctly.
+- **Password strength:** Weak passwords can make password-derived encryption keys vulnerable to guessing attacks.
+- **Steganalysis:** LSB steganography can be detected by statistical analysis and is not guaranteed to conceal the existence of hidden data.
+- **Lossy compression:** JPEG recompression, resizing, and image transformations may destroy embedded information.
+- **Image capacity:** The amount of data that can be hidden depends on the carrier image and the implementation.
+- **Secure handling:** Do not expose passwords or use this educational implementation as a substitute for a professionally audited secure communication system.
+
+## 🔮 Future Enhancements
+
+Possible future improvements include:
+
+- Support for additional carrier image formats.
+- Improved payload capacity management.
+- Stronger input validation and clearer error messages.
+- Automated testing for encryption, extraction, and decryption.
+- Improved graphical interface and usability.
+- More comprehensive evaluation of image quality and resistance to steganalysis.
+- Packaging the application as a standalone executable for easier use on other computers.
+
+## 👩‍💻 Author
+
+**Rishika Singh**
+
+GitHub: [@Rish211206](https://github.com/Rish211206)
+
+## 📄 License
+
+No license has been specified yet. Unless a license is added to the repository, the project should not be assumed to be available for unrestricted reuse or redistribution.
